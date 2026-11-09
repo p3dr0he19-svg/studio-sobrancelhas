@@ -1,0 +1,22 @@
+{
+  "id": "/?app=painel",
+  "name": "Painel do Studio — Nexosys",
+  "short_name": "Painel Studio",
+  "description": "Agenda, clientes e caixa do studio de sobrancelhas.",
+  "lang": "pt-BR",
+  "start_url": "/#/inicio",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FAF6F2",
+  "theme_color": "#C98B7B",
+  "icons": [
+    { "src": "/icons/painel-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/painel-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/painel-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Novo atendimento", "url": "/#/novo" },
+    { "name": "Agenda", "url": "/#/agenda" }
+  ]
+}
