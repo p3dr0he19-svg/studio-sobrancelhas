@@ -44,22 +44,41 @@ server.js                   servidor estático de desenvolvimento
 Painel → **Configurações**: nome (padrão `[NOME DO STUDIO]`), logo, frase, endereço, WhatsApp, Instagram, horário de funcionamento, regras do agendamento online, lembretes, senha e verificação em duas etapas.
 Para voltar aos dados de exemplo: Configurações → Dados de demonstração → **Restaurar**.
 
-## O que é protótipo e o que muda em produção
+## Servidor de sincronização (fase de validação)
 
-O protótipo guarda os dados no `localStorage` do navegador (mesma origem = os dois apps compartilham o banco). Isso basta para demonstrar, mas **não** serve para uso real com várias clientes em aparelhos diferentes. Para produção:
+Os dois apps compartilham um banco na nuvem: **Cloudflare Worker + D1**, código em `api/`.
 
-1. **Banco e API** — trocar `Nexo.load/save` por uma API (ex.: Supabase/Postgres). As funções de regra (`horariosLivres`, `reservar`, `podeCancelar`…) já estão separadas em `core.js`.
-2. **Reserva atômica** — no protótipo, `reservar()` relê o banco, revalida e grava dentro de uma trava (Web Locks), o que impede duplicidade entre abas. No servidor, a garantia deve vir do próprio banco:
+- Publicado na conta Cloudflare **pessoal** (validação): `https://studio-sobrancelhas-api.importa-cssbuy.workers.dev`
+- Site: GitHub Pages em `https://p3dr0he19-svg.github.io/studio-sobrancelhas/`
+- Cada registro (cliente, agendamento, foto…) é uma linha; o app envia **só os campos que mudou** e busca as novidades a cada ~4 s. Assim, dois aparelhos mexendo em coisas diferentes ao mesmo tempo não se apagam.
+- O endereço do servidor fica em `API_PADRAO` (`assets/core.js`). Sem servidor (`API_PADRAO = ''`), o app volta a guardar tudo só no navegador.
+- Para testar contra outro servidor sem mudar o código: no console do navegador, `localStorage.nexo_api = 'http://localhost:8787'` (ou `'local'` para o modo só-navegador) e recarregue.
+
+```bash
+# servidor local (banco D1 local, não mexe na nuvem)
+cd api && npx wrangler dev --local --port 8787
+# publicar (usa a conta pessoal, login separado do da Nexosys)
+cd api && XDG_CONFIG_HOME=~/.cf-pessoal npx wrangler deploy
+```
+
+**Restaurar a demonstração** (Painel → Configurações → Dados de demonstração) agora apaga e recarrega o banco **para todos os aparelhos**.
+
+## O que falta para lançar
+
+A sincronização já funciona entre aparelhos, mas o servidor ainda **não tem autenticação**: quem souber o endereço da API consegue ler e gravar. Por isso, na validação, **use só dados de teste**. Antes de receber clientes reais:
+
+1. **Autenticação no servidor** — login da dona e das clientes validado pela API (sessão/token), cada cliente só lê os próprios dados, e senhas com hash forte (Argon2/bcrypt) feito no servidor. Hoje o hash é só demonstrativo e roda no navegador.
+2. **Reserva atômica** — hoje `reservar()` busca o estado mais recente do servidor antes de gravar, o que barra a maioria dos conflitos, mas duas reservas no mesmo segundo ainda podem passar. A garantia final deve vir do próprio banco (verificação de sobreposição no Worker, dentro da gravação):
    ```sql
    create extension if not exists btree_gist;
    alter table agendamentos add constraint sem_sobreposicao
      exclude using gist (studio_id with =, tstzrange(inicio, fim) with &&)
      where (status in ('pendente','confirmado','concluido'));
    ```
-3. **Senhas** — o hash do protótipo é só demonstrativo; usar Argon2/bcrypt no servidor.
+3. **Mover para a conta da Nexosys** — Worker, D1 e GitHub da empresa, depois da validação.
 4. **Notificações com o app fechado** — o `sw.js` já trata o evento `push`; falta o servidor enviar Web Push (chaves VAPID) para a inscrição de cada aparelho. No protótipo, as notificações aparecem quando algum dos apps está aberto.
 5. **Lembretes 24 h / 2 h e WhatsApp** — hoje são gerados por quem estiver com o app aberto, e o WhatsApp abre com a mensagem pronta. Em produção: um job agendado no servidor e a API oficial do WhatsApp Business.
-6. **Fotos antes/depois** — no protótipo ficam no próprio banco local (compactadas). Em produção: armazenamento privado com URLs assinadas.
+6. **Fotos** — hoje ficam dentro do banco (compactadas). Em produção: armazenamento de arquivos (ex.: Cloudflare R2), privado para as fotos de ficha.
 7. **Exportações** — Caixa → PDF (impressão do navegador → "Salvar como PDF") e Excel (CSV com `;` e vírgula decimal, abre direto no Excel em pt-BR).
 
 ## Regras implementadas (padrões, todas configuráveis)

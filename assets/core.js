@@ -1,7 +1,7 @@
 /* =====================================================================
    Núcleo compartilhado — Painel da dona (/) e App da cliente (/cliente)
-   "Banco de dados" do protótipo: localStorage (mesma origem = mesmo banco).
-   Em produção, trocar por API + Postgres (ver README: reserva atômica).
+   Banco: servidor (Cloudflare Worker + D1, pasta /api) compartilhado entre aparelhos,
+   ou localStorage quando não há servidor configurado (ver "Persistência").
    Desenvolvido por Nexosys
    ===================================================================== */
 (function (g) {
@@ -290,24 +290,216 @@ Usamos senha protegida, conexão criptografada e acesso restrito à profissional
     return db;
   }
 
-  /* ---------------- Persistência ---------------- */
+  /* ---------------- Persistência ----------------
+     Dois modos:
+     • LOCAL  (sem API): o banco fica no localStorage deste navegador (protótipo original).
+     • REMOTO (com API): o banco fica no servidor (Cloudflare Worker + D1) e é compartilhado
+       entre aparelhos. Cada registro (cliente, agendamento, foto…) é uma linha; o app envia
+       só o que mudou e busca as novidades a cada poucos segundos.
+     Para testes locais dá para trocar o servidor: localStorage "nexo_api" = URL (ou "local"). */
+  const API_PADRAO = 'https://studio-sobrancelhas-api.importa-cssbuy.workers.dev'; // conta Cloudflare pessoal (validação)
+  const apiURL = () => { let v = null; try { v = localStorage.getItem('nexo_api'); } catch (e) { } if (v === 'local') return ''; return (v || API_PADRAO).replace(/\/+$/, ''); };
+  const REMOTO = !!apiURL();
+  const CFG_COL = '_cfg';
+  const COLS = ['servicos', 'clientes', 'agendamentos', 'bloqueios', 'despesas', 'avaliacoes', 'notificacoes', 'filaWhats', 'galeria', 'lgpd.aceites', 'lgpd.pedidos', 'lgpd.log'];
+  const TOPO_COLS = new Set(COLS.map(c => c.split('.')[0]));
+  const getCol = (db, c) => { const [a, b] = c.split('.'); return b ? (db[a] || {})[b] : db[a]; };
+
   let cache = null;
+  const ouvintes = [];
+  function onChange(f) { ouvintes.push(f); }
+  const avisar = origem => ouvintes.forEach(f => { try { f(origem); } catch (e) { console.error(e); } });
+
   function load(fresh) {
+    if (REMOTO) { if (!cache) cache = docDaBase(); return cache; }
     if (cache && !fresh) return cache;
     try { const raw = localStorage.getItem(KEY); if (raw) { cache = JSON.parse(raw); if (!cache.galeria) cache.galeria = galeriaExemplo(); /* bancos antigos */ return cache; } } catch (e) { /* segue */ }
     cache = seed(); persist(cache); return cache;
   }
   function persist(db) { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { alert('Não foi possível salvar (armazenamento cheio?). Remova fotos grandes.'); } }
-  const ouvintes = [];
-  function save(db) { cache = db || cache; persist(cache); ouvintes.forEach(f => f()); }
-  function onChange(f) { ouvintes.push(f); }
-  g.addEventListener('storage', e => { if (e.key === KEY) { cache = null; load(); ouvintes.forEach(f => f()); } });
-  function reset() { localStorage.removeItem(KEY); cache = null; return load(); }
 
-  /* Trava entre abas (Web Locks). Garante que leitura+verificação+gravação sejam atômicas. */
+  /* ---- Modo remoto ---- */
+  // base: o que este aparelho sabe que está no servidor. Map col → Map id → { ordem, json }
+  let base = new Map(); let seq = 0;
+  // Foto de cada objeto "db" entregue ao app, para saber o que ESTE objeto mudou (e não apagar
+  // por engano o que chegou de outro aparelho enquanto a tela estava aberta).
+  const fotos = new WeakMap();
+  const pend = []; // operações ainda não confirmadas pelo servidor
+  let enviando = null, buscando = null, falhas = 0, avisouFalha = false;
+
+  const novaBase = () => { const m = new Map([[CFG_COL, new Map()]]); COLS.forEach(c => m.set(c, new Map())); return m; };
+  const copiaBase = b => { const m = new Map(); b.forEach((v, k) => m.set(k, new Map(v))); return m; };
+  base = novaBase();
+
+  function docDaBase() {
+    const db = { lgpd: {} };
+    base.get(CFG_COL).forEach((r, k) => { db[k] = JSON.parse(r.json); });
+    COLS.forEach(c => {
+      const arr = [...base.get(c).values()].sort((x, y) => x.ordem - y.ordem).map(r => JSON.parse(r.json));
+      const [a, b] = c.split('.'); if (b) (db[a] = db[a] || {})[b] = arr; else db[a] = arr;
+    });
+    fotos.set(db, copiaBase(base));
+    return db;
+  }
+
+  // Quais campos de um registro mudaram. Assim, dois aparelhos que mexem em campos diferentes
+  // do mesmo registro (ex.: a cliente cancela enquanto o painel marca um lembrete) não se atropelam.
+  const objPlano = v => v && typeof v === 'object' && !Array.isArray(v);
+  const CHAVE_OK = /^[A-Za-z0-9_]{1,60}$/;
+  function camposAlterados(jsonAntigo, novo) {
+    let antigo; try { antigo = JSON.parse(jsonAntigo); } catch (e) { return null; }
+    if (!objPlano(antigo) || !objPlano(novo)) return null;
+    const campos = {}, rem = [];
+    Object.keys(novo).forEach(k => { const v = JSON.stringify(novo[k]); if (v !== undefined && v !== JSON.stringify(antigo[k])) campos[k] = v; });
+    Object.keys(antigo).forEach(k => { if (novo[k] === undefined) rem.push(k); });
+    const todas = Object.keys(campos).concat(rem);
+    if (!todas.length || todas.length > 45 || todas.some(k => !CHAVE_OK.test(k))) return null; // sem parcial: manda o registro inteiro
+    return { campos, rem };
+  }
+
+  // Compara o objeto com a foto dele e devolve as operações (inserir/alterar/excluir/reordenar)
+  function calcularOps(db, foto) {
+    const ops = [];
+    Object.keys(db).forEach(k => {
+      if (TOPO_COLS.has(k)) return;
+      const j = JSON.stringify(db[k]); const r = foto.get(CFG_COL).get(k);
+      if (!r || r.json !== j) ops.push(Object.assign({ col: CFG_COL, id: k, ordem: 0, json: j }, r ? camposAlterados(r.json, db[k]) : null));
+    });
+    COLS.forEach(c => {
+      const arr = (getCol(db, c) || []).filter(it => it && it.id != null); const fc = foto.get(c);
+      const ords = arr.map(it => { const r = fc.get(String(it.id)); return r ? r.ordem : null; });
+      const vistos = new Set(); let prev = -Infinity;
+      arr.forEach((it, i) => {
+        const id = String(it.id); vistos.add(id);
+        const r = fc.get(id); let o = r ? r.ordem : null;
+        if (o == null || !(o > prev)) { // item novo ou fora de ordem: escolhe uma posição entre os vizinhos
+          let prox = null; for (let k = i + 1; k < arr.length; k++) if (ords[k] != null && ords[k] > prev) { prox = ords[k]; break; }
+          o = prev === -Infinity ? (prox != null ? prox - 1 : i) : (prox != null ? (prev + prox) / 2 : prev + 1);
+        }
+        prev = o;
+        const j = JSON.stringify(it);
+        if (!r || r.json !== j || r.ordem !== o) ops.push(Object.assign({ col: c, id, ordem: o, json: j }, r && r.json !== j ? camposAlterados(r.json, it) : null));
+      });
+      fc.forEach((_, id) => { if (!vistos.has(id)) ops.push({ col: c, id, del: true }); });
+    });
+    return ops;
+  }
+  function aplicar(b, op) {
+    const m = b.get(op.col); if (!m) return;
+    if (op.del) m.delete(op.id); else m.set(op.id, { ordem: op.ordem, json: op.json });
+  }
+
+  async function api(caminho, corpo) {
+    const r = await fetch(apiURL() + caminho, corpo ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) } : { cache: 'no-store' });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(d.erro || ('HTTP ' + r.status)); e.status = r.status; e.dados = d; throw e; }
+    return d;
+  }
+
+  // Envia as operações pendentes (uma remessa por vez, na ordem)
+  function enviar() {
+    if (enviando) return enviando;
+    if (!pend.length) return Promise.resolve();
+    const lote = []; let parciais = 0, tam = 0;
+    for (const op of pend) {
+      const t = (op.json || '').length;
+      if (lote.length && (parciais + (op.campos ? 1 : 0) > 38 || tam + t > 8e6)) break;
+      lote.push(op); if (op.campos) parciais++; tam += t;
+    }
+    enviando = api('/api/mudancas', { ops: lote }).then(r => {
+      pend.splice(0, lote.length); falhas = 0; avisouFalha = false;
+      if (r.seq === seq + 1) seq = r.seq; // ninguém gravou no meio: já estamos em dia
+    }).catch(e => {
+      falhas++;
+      if (!avisouFalha && g.UI) { avisouFalha = true; g.UI.toast('Sem conexão com o servidor. Vamos tentar enviar de novo.', 'erro'); }
+      throw e;
+    }).finally(() => { enviando = null; });
+    return enviando.then(() => (pend.length ? enviar() : undefined));
+  }
+
+  // Busca o que mudou no servidor desde a última vez
+  function buscar(tudo) {
+    if (buscando) return buscando;
+    buscando = (async () => {
+      const r = await api('/api/estado?desde=' + (tudo ? 0 : seq));
+      if (!r.iniciado) return false;
+      if (tudo) base = novaBase();
+      if (!r.regs.length && !tudo) { seq = r.seq; return true; }
+      r.regs.forEach(op => aplicar(base, op));
+      pend.forEach(op => aplicar(base, op)); // o que ainda não subiu continua valendo aqui
+      seq = r.seq; cache = docDaBase();
+      if (!tudo) avisar('remoto');
+      return true;
+    })().finally(() => { buscando = null; });
+    return buscando;
+  }
+
+  async function sincronizar() {
+    if (!REMOTO) return;
+    try { await enviar(); } catch (e) { return; }
+    try { await buscar(false); } catch (e) { /* tenta de novo no próximo ciclo */ }
+  }
+
+  async function iniciarServidor(forcar) {
+    const db = seed(); base = novaBase();
+    const ops = calcularOps(db, novaBase());
+    await api('/api/iniciar', { ops, forcar: !!forcar });
+  }
+
+  // Carga inicial: os apps só desenham depois disto
+  const pronto = !REMOTO ? Promise.resolve() : (async () => {
+    let ok = await buscar(true);
+    if (ok && !base.get(CFG_COL).has('studio')) { await iniciarServidor(true); ok = await buscar(true); } // banco sem configurações: recarrega a demonstração
+    if (!ok) {
+      try { await iniciarServidor(false); } catch (e) { if (e.status !== 409) throw e; }
+      ok = await buscar(true);
+    }
+    if (!ok) throw new Error('Servidor não iniciado');
+    let canal = null; try { canal = new BroadcastChannel('nexo-sync'); canal.onmessage = () => sincronizar(); } catch (e) { }
+    g.__nexoCanal = canal;
+    setInterval(() => { if (!document.hidden) sincronizar(); }, 4000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) sincronizar(); });
+    g.addEventListener('online', sincronizar);
+  })();
+
+  function save(db) {
+    db = db || cache;
+    if (!REMOTO) { cache = db; persist(cache); avisar('local'); return; }
+    const foto = fotos.get(db) || base;
+    const ops = calcularOps(db, foto);
+    if (ops.length) {
+      ops.forEach(op => { aplicar(base, op); aplicar(foto, op); });
+      pend.push(...ops);
+    }
+    if (foto !== base) fotos.set(db, foto);
+    cache = db === cache || !cache ? db : docDaBase(); // objeto antigo: refaz a partir da base
+    if (cache === db) fotos.set(db, copiaBase(base));
+    avisar('local');
+    if (ops.length) enviar().then(() => { try { g.__nexoCanal && g.__nexoCanal.postMessage(1); } catch (e) { } }).catch(() => { });
+  }
+
+  if (!REMOTO) g.addEventListener('storage', e => { if (e.key === KEY) { cache = null; load(); avisar('remoto'); } });
+
+  async function reset() {
+    if (!REMOTO) { localStorage.removeItem(KEY); cache = null; return load(); }
+    await iniciarServidor(true); pend.length = 0; seq = 0;
+    await buscar(true); avisar('local'); return cache;
+  }
+
+  /* Trava: garante que leitura + verificação + gravação aconteçam juntas.
+     No modo remoto, antes de decidir busca o estado mais recente do servidor e,
+     depois, espera a gravação subir (ex.: reserva de horário). */
   async function comTrava(fn) {
-    if (navigator.locks && navigator.locks.request) return navigator.locks.request('nexosys-agenda', async () => { cache = null; const db = load(true); return fn(db); });
-    cache = null; return fn(load(true));
+    const exec = async () => {
+      if (!REMOTO) { cache = null; return fn(load(true)); }
+      try { await enviar(); } catch (e) { }
+      try { await buscar(false); } catch (e) { }
+      const r = await fn(load());
+      try { await enviar(); } catch (e) { /* fica na fila; o aviso de falha já apareceu */ }
+      return r;
+    };
+    if (navigator.locks && navigator.locks.request) return navigator.locks.request('nexosys-agenda', exec);
+    return exec();
   }
 
   /* ---------------- Regras de agenda ---------------- */
@@ -484,7 +676,7 @@ Usamos senha protegida, conexão criptografada e acesso restrito à profissional
   const PAGAMENTOS = { pix: 'Pix', dinheiro: 'Dinheiro', debito: 'Cartão de débito', credito: 'Cartão de crédito', outro: 'Não informado' };
 
   g.Nexo = {
-    TZ, KEY, load, save, reset, onChange, comTrava, uid, hash, isoAgora,
+    TZ, KEY, load, save, reset, onChange, comTrava, pronto, sincronizar, remoto: REMOTO, uid, hash, isoAgora,
     agora, hoje, addDias, diaSemana, diffDias, hm, mh, abs, absAgora, inicioSemana,
     fmtData, fmtDataLonga, fmtDataHora, fmtMoeda, fmtDur, fmtFone, soDigitos, DIAS, DIAS_C, MESES,
     servico, cliente, nomesServ, somaServ, bloqueiosDoDia, diaFechado, horariosLivres, conflito, reservar, ATIVOS,

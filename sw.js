@@ -1,5 +1,5 @@
 /* Service worker — Painel (/) e App da cliente (/cliente) · Nexosys */
-const VERSAO = 'nexo-studio-v7';
+const VERSAO = 'nexo-studio-v8';
 // B = pasta do app ("/" local, "/studio-sobrancelhas/" no GitHub Pages)
 const B = new URL('./', self.location).pathname;
 const SHELL = ['', 'index.html', 'cliente/', 'cliente/index.html', 'assets/styles.css', 'assets/core.js', 'assets/ui.js', 'assets/painel.js', 'assets/cliente.js',

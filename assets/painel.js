@@ -757,7 +757,7 @@
   P.logo = async inp => { const f = inp.files[0]; if (!f) return; try { const u = await UI.arquivoParaDataURL(f, 256); P.cfg('studio.logo', u); rerender(); } catch (e) { toast('Imagem inválida.', 'erro'); } };
   P.ativarNotif = async () => { if (Notification.permission !== 'granted' && !await UI.pedirNotificacoes()) return rerender(); UI.notificarSistema('Notificações ativas', 'Você vai receber os novos pedidos de agendamento aqui.'); rerender(); };
   P.copiarLink = () => { const u = location.origin + UI.BASE + 'cliente/'; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast('Link copiado: ' + u)).catch(() => prompt('Copie o link:', u)); };
-  P.resetDemo = async () => { if (!await confirmar('Restaurar os dados de demonstração? Tudo o que foi alterado será perdido.', { perigo: true, sim: 'Restaurar' })) return; N.reset(); S.novo = null; toast('Dados de demonstração restaurados.'); render(); };
+  P.resetDemo = async () => { if (!await confirmar(N.remoto ? 'Restaurar os dados de demonstração para TODOS os aparelhos? Clientes, horários e fotos cadastrados serão apagados.' : 'Restaurar os dados de demonstração? Tudo o que foi alterado será perdido.', { perigo: true, sim: 'Restaurar' })) return; try { await N.reset(); } catch (e) { return toast('Não foi possível restaurar agora. Confira a conexão.', 'erro'); } S.novo = null; toast('Dados de demonstração restaurados.'); render(); };
   P.trocarSenha = () => {
     const db = D(); if (N.hash($('#sg-a').value) !== db.seguranca.senhaHash) return toast('Senha atual incorreta.', 'erro');
     const n = $('#sg-n').value; if (n.length < 6) return toast('A nova senha precisa de ao menos 6 caracteres.', 'erro'); if (n !== $('#sg-r').value) return toast('As senhas não conferem.', 'erro');
@@ -872,18 +872,25 @@
     <a class="card" href="javascript:P.sair()">${ic('out')}<b>Sair</b><span>Encerrar sessão</span></a></div>`;
 
   /* ============================ Inicialização ============================ */
-  const vistos = new Set(D().notificacoes.map(n => n.id));
-  N.onChange(() => {
+  let vistos = new Set();
+  N.onChange(origem => {
+    if (!carregado) return;
     const db = D(); const novas = db.notificacoes.filter(n => n.para === 'dona' && !vistos.has(n.id));
     db.notificacoes.forEach(n => vistos.add(n.id));
     novas.forEach(n => { toast(n.titulo + ': ' + n.texto); UI.notificarSistema(n.titulo, n.texto, UI.BASE + '#/inicio'); });
     if (!sessaoOK()) return;
     const ativo = document.activeElement; const digitando = ativo && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName);
-    if (novas.length && !document.querySelector('.modal-bg') && !digitando) rerender();
+    // Mudança vinda de outro aparelho (ex.: cliente marcou ou cancelou): atualiza a tela
+    if ((novas.length || origem === 'remoto') && !document.querySelector('.modal-bg') && !digitando) rerender();
   });
-  addEventListener('hashchange', () => { UI.fecharModais(); if (!location.hash.startsWith('#/novo')) S.novo = S.novo && S.novo.passo > 1 ? S.novo : null; render(); });
+  let carregado = false;
+  addEventListener('hashchange', () => { if (!carregado) return; UI.fecharModais(); if (!location.hash.startsWith('#/novo')) S.novo = S.novo && S.novo.passo > 1 ? S.novo : null; render(); });
   UI.tema(); UI.pwa();
-  setInterval(() => { if (sessaoOK()) N.processarLembretes(D()); }, 60000);
-  setTimeout(() => N.processarLembretes(D()), 1500);
-  render();
+  UI.telaCarregando(app);
+  N.pronto.then(() => {
+    vistos = new Set(D().notificacoes.map(n => n.id)); carregado = true;
+    setInterval(() => { if (sessaoOK()) N.processarLembretes(D()); }, 60000);
+    setTimeout(() => N.processarLembretes(D()), 1500);
+    render();
+  }).catch(e => { console.error(e); UI.telaSemConexao(app); });
 })();

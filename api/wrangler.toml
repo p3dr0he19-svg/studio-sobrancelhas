@@ -1,0 +1,12 @@
+# API do Studio — conta Cloudflare PESSOAL (p3dr0he19@gmail.com) na fase de validação.
+# Para publicar: ver README.md (seção "Servidor de sincronização").
+name = "studio-sobrancelhas-api"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+account_id = "485b2c0df788a295f400b445dc5b2eef"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "studio-sobrancelhas"
+database_id = "4c994d4c-388f-4814-bfbc-345505f3859b"

@@ -382,6 +382,9 @@ a.nexo-ig:hover, a.nexo-ig:focus-visible { color: var(--primary-d); opacity: 1; 
 .fv-x { top: calc(14px + env(safe-area-inset-top)); right: 14px; }
 .fv-ant { left: 10px; top: 50%; transform: translateY(-50%); }
 .fv-prox { right: 10px; top: 50%; transform: translateY(-50%); }
+.carregando { min-height: 70vh; display: grid; place-items: center; text-align: center; padding: 24px; }
+.carregando .spin { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--line-2); border-top-color: var(--primary); animation: gira .8s linear infinite; margin: 0 auto 12px; }
+@keyframes gira { to { transform: rotate(360deg); } }
 .ola { padding: 18px 2px 4px; }
 .ola h1 { font-size: 28px; }
 .ola p { color: var(--muted); margin-top: 4px; }

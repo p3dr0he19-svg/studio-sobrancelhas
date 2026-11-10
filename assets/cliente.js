@@ -461,8 +461,9 @@
   };
 
   /* ============================ Inicialização ============================ */
-  const vistos = new Set(D().notificacoes.map(n => n.id));
+  let vistos = new Set();
   N.onChange(() => {
+    if (!carregado) return;
     const db = D(); const c = eu(db);
     const novas = c ? db.notificacoes.filter(n => n.para === c.id && !vistos.has(n.id)) : [];
     db.notificacoes.forEach(n => vistos.add(n.id));
@@ -472,8 +473,14 @@
     if (!document.querySelector('.modal-bg') && !(ativo && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName))) rerender();
   });
   const renderBase = render;
-  addEventListener('hashchange', () => { UI.fecharModais(); const r = rota().r; if (r !== 'agendar' && r !== 'sucesso' && S.ag && S.ag.remarcarId) S.ag = null; renderBase(); scrollTo(0, 0); });
+  let carregado = false;
+  addEventListener('hashchange', () => { if (!carregado) return; UI.fecharModais(); const r = rota().r; if (r !== 'agendar' && r !== 'sucesso' && S.ag && S.ag.remarcarId) S.ag = null; renderBase(); scrollTo(0, 0); });
   UI.tema(); UI.pwa();
-  setInterval(() => N.processarLembretes(D()), 60000);
-  render();
+  UI.telaCarregando(app);
+  N.pronto.then(() => {
+    vistos = new Set(D().notificacoes.map(n => n.id)); carregado = true;
+    // Com servidor, quem processa os lembretes é o painel (evita avisos duplicados vindos de cada celular)
+    if (!N.remoto) setInterval(() => N.processarLembretes(D()), 60000);
+    render();
+  }).catch(e => { console.error(e); UI.telaSemConexao(app); });
 })();

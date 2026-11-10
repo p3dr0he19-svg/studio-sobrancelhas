@@ -185,5 +185,9 @@
     return grupos.map(([n, f]) => { const l = lista.filter(f); return l.length ? `<div class="slot-grupo">${n}</div><div class="slots">${l.map(h => `<button type="button" class="slot ${h === sel ? 'on' : ''}" onclick="${onClick}('${h}')">${h}</button>`).join('')}</div>` : ''; }).join('');
   }
 
-  g.UI = { BASE, assinatura, calendario, gradeSlots, esc, $, $$, ic, logoSVG, logoStudio, toast, modal, confirmar, fecharModais, tema, estrelas, iniciais, badge, pwa, pedirNotificacoes, notificarSistema, instalar, arquivoParaDataURL, mascaraFone };
+  function telaCarregando(el) { el.innerHTML = `<div class="carregando"><div class="spin" aria-hidden="true"></div><p class="muted small">Carregando…</p></div>`; }
+  function telaSemConexao(el) {
+    el.innerHTML = `<div class="carregando"><div class="vazio">${ic('x')}<h3 class="mt-s">Sem conexão com o servidor</h3><p class="mt-s muted">Confira a internet e tente de novo.</p><button class="btn mt" onclick="location.reload()">Tentar de novo</button></div></div>`;
+  }
+  g.UI = { BASE, assinatura, telaCarregando, telaSemConexao, calendario, gradeSlots, esc, $, $$, ic, logoSVG, logoStudio, toast, modal, confirmar, fecharModais, tema, estrelas, iniciais, badge, pwa, pedirNotificacoes, notificarSistema, instalar, arquivoParaDataURL, mascaraFone };
 })(window);
