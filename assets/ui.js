@@ -102,10 +102,13 @@
   const badge = st => `<span class="badge st-${st}">${Nexo.STATUS[st] || st}</span>`;
 
   /* PWA + notificações do sistema */
+  // Pasta onde o app está publicado: "/" no servidor local, "/studio-sobrancelhas/" no GitHub Pages.
+  const BASE = location.pathname.replace(/cliente\/.*$/, '').replace(/[^/]*$/, '');
+  const ehCliente = () => location.pathname.startsWith(BASE + 'cliente');
   let swReg = null;
   async function pwa() {
     if ('serviceWorker' in navigator) {
-      try { swReg = await navigator.serviceWorker.register('/sw.js', { scope: '/' }); } catch (e) { console.warn('SW', e); }
+      try { swReg = await navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE }); } catch (e) { console.warn('SW', e); }
     }
   }
   async function pedirNotificacoes() {
@@ -117,7 +120,7 @@
   async function notificarSistema(titulo, texto, url) {
     if (!('Notification' in g) || Notification.permission !== 'granted') return;
     const reg = swReg || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration());
-    const op = { body: texto, icon: '/icons/' + (location.pathname.startsWith('/cliente') ? 'cliente' : 'painel') + '-192.png', badge: '/icons/badge.png', data: { url: url || location.href }, tag: titulo };
+    const op = { body: texto, icon: BASE + 'icons/' + (ehCliente() ? 'cliente' : 'painel') + '-192.png', badge: BASE + 'icons/badge.png', data: { url: url || location.href }, tag: titulo };
     if (reg) reg.showNotification(titulo, op); else new Notification(titulo, op);
   }
   let instalarEvt = null;
@@ -171,5 +174,5 @@
     return grupos.map(([n, f]) => { const l = lista.filter(f); return l.length ? `<div class="slot-grupo">${n}</div><div class="slots">${l.map(h => `<button type="button" class="slot ${h === sel ? 'on' : ''}" onclick="${onClick}('${h}')">${h}</button>`).join('')}</div>` : ''; }).join('');
   }
 
-  g.UI = { calendario, gradeSlots, esc, $, $$, ic, logoSVG, logoStudio, toast, modal, confirmar, fecharModais, tema, estrelas, iniciais, badge, pwa, pedirNotificacoes, notificarSistema, instalar, arquivoParaDataURL, mascaraFone };
+  g.UI = { BASE, calendario, gradeSlots, esc, $, $$, ic, logoSVG, logoStudio, toast, modal, confirmar, fecharModais, tema, estrelas, iniciais, badge, pwa, pedirNotificacoes, notificarSistema, instalar, arquivoParaDataURL, mascaraFone };
 })(window);

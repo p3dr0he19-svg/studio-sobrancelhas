@@ -127,6 +127,17 @@ Usamos senha protegida, conexão criptografada e acesso restrito à profissional
   /* ---------------- Dados de exemplo ---------------- */
   function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
+  /* Galeria de exemplo: ilustrações (não são fotos reais), marcadas com exemplo:true */
+  function galeriaExemplo() {
+    const cores = [['#EBD2C7', '#C98B7B'], ['#F4E6DA', '#D4A88C'], ['#E7D0C6', '#A86F62'], ['#F6EADF', '#C98B7B'], ['#E2C6BA', '#8E5A4F'], ['#F1DDD3', '#B98270']];
+    const legendas = ['Design com henna', 'Brow lamination', 'Micropigmentação fio a fio', 'Design de sobrancelhas', 'Lash lifting', 'Coloração de sobrancelhas'];
+    return legendas.map((legenda, i) => {
+      const [a, b] = cores[i]; const y = 215 + (i % 3) * 12, k = 135 + (i % 2) * 20;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs><rect width="400" height="400" fill="url(#g)"/><path d="M62 ${y + 10} C 130 ${k}, 262 ${k - 8}, 338 ${y - 20}" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width="${12 + (i % 3) * 4}" stroke-linecap="round"/><path d="M84 ${y + 28} C 150 ${k + 40}, 252 ${k + 34}, 322 ${y}" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="3" stroke-linecap="round"/><circle cx="326" cy="${k - 14}" r="6" fill="#fff" fill-opacity=".8"/></svg>`;
+      return { id: 'gx' + i, url: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg), legenda, exemplo: true, em: '2026-10-01T12:00:00Z' };
+    });
+  }
+
   function seed() {
     const r = rng(20261109); const pick = a => a[Math.floor(r() * a.length)];
     const H = hoje();
@@ -175,7 +186,7 @@ Usamos senha protegida, conexão criptografada e acesso restrito à profissional
       studio: { nome: '[NOME DO STUDIO]', slogan: 'Sobrancelhas que valorizam a sua beleza natural.', endereco: 'Rua das Flores, 123 — Sala 4, Jardim Paulista, São Paulo/SP', whatsapp: '11999990000', instagram: '@nomedostudio', logo: null },
       horario,
       regras: { online: true, antecedenciaMinH: 2, janelaDias: 45, cancelarH: 4, remarcarH: 6, gradeMin: 15, confirmacao: 'pendente', limiteDia: 2, lembrete24: true, lembrete2: true, lembreteWhats: true, lembretePush: true, sumidasDias: 45 },
-      servicos, clientes, agendamentos: [], bloqueios: [], despesas: [], avaliacoes: [], notificacoes: [], filaWhats: [],
+      servicos, clientes, agendamentos: [], bloqueios: [], despesas: [], avaliacoes: [], notificacoes: [], filaWhats: [], galeria: galeriaExemplo(),
       termos: { versao: '1.2', data: '2026-10-01', texto: TERMOS_TXT },
       privacidade: { versao: '1.2', data: '2026-10-01', texto: PRIV_TXT },
       lgpd: { aceites: [], pedidos: [], log: [] },
@@ -283,7 +294,7 @@ Usamos senha protegida, conexão criptografada e acesso restrito à profissional
   let cache = null;
   function load(fresh) {
     if (cache && !fresh) return cache;
-    try { const raw = localStorage.getItem(KEY); if (raw) { cache = JSON.parse(raw); return cache; } } catch (e) { /* segue */ }
+    try { const raw = localStorage.getItem(KEY); if (raw) { cache = JSON.parse(raw); if (!cache.galeria) cache.galeria = galeriaExemplo(); /* bancos antigos */ return cache; } } catch (e) { /* segue */ }
     cache = seed(); persist(cache); return cache;
   }
   function persist(db) { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { alert('Não foi possível salvar (armazenamento cheio?). Remova fotos grandes.'); } }

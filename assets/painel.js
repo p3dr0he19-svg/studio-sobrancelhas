@@ -18,7 +18,7 @@
   function telaLogin() {
     const db = D();
     document.title = 'Entrar · ' + db.studio.nome;
-    app.innerHTML = `<div class="login-w"><div class="login">
+    app.innerHTML = `<div class="login-w"><button class="btn-ic login-tema" id="tema-b" onclick="P.tema()" aria-label="Modo claro/escuro" title="Modo claro/escuro">${icTema()}</button><div class="login">
       <div class="marca">${UI.logoStudio(db, 64)}<h1>${esc(db.studio.nome)}</h1><p class="muted small">Painel da profissional</p></div>
       <div class="card">
       ${S.login.passo === 1 ? `
@@ -36,7 +36,7 @@
           <button type="button" class="btn ghost" onclick="P.voltarLogin()">Voltar</button>
         </form>`}
       </div>
-      <p class="mt small" style="text-align:center"><a href="/cliente/">Abrir o app da cliente →</a></p>
+      <p class="mt small" style="text-align:center"><a href="cliente/">Abrir o app da cliente →</a></p>
       <div class="nexo-ass">Desenvolvido por <b>Nexosys</b></div>
     </div></div>`;
   }
@@ -52,8 +52,12 @@
   P.sair = async () => { if (await confirmar('Sair do painel neste aparelho?', { sim: 'Sair' })) { try { localStorage.removeItem('nexo_sessao_dona'); } catch (e) { } render(); } };
 
   /* ============================ Estrutura ============================ */
+  // "Hoje", "Amanhã" ou "Qua, 11/11"
+  const diaCurto = d => { const hj = N.hoje(); if (d === hj) return 'Hoje'; if (d === N.addDias(hj, 1)) return 'Amanhã'; return `${N.DIAS_C[N.diaSemana(d)]}, ${d.slice(8, 10)}/${d.slice(5, 7)}`; };
+  const escuro = () => document.documentElement.dataset.theme === 'dark';
+  const icTema = () => ic(escuro() ? 'sun' : 'moon');
   const MENU = [['inicio', 'Início', 'home'], ['agenda', 'Agenda', 'cal'], ['novo', 'Novo', 'plus'], ['clientes', 'Clientes', 'users'], ['caixa', 'Caixa', 'cash']];
-  const MAIS = [['atendimentos', 'Atendimentos', 'list', 'Histórico e status'], ['servicos', 'Serviços e preços', 'tag', 'Duração, valores, retorno'], ['avaliacoes', 'Avaliações', 'star', 'Notas das clientes'], ['config', 'Configurações', 'gear', 'Studio, regras, segurança'], ['privacidade', 'Privacidade (LGPD)', 'shield', 'Aceites e pedidos']];
+  const MAIS = [['atendimentos', 'Atendimentos', 'list', 'Histórico e status'], ['servicos', 'Serviços e preços', 'tag', 'Duração, valores, retorno'], ['avaliacoes', 'Avaliações', 'star', 'Notas das clientes'], ['galeria', 'Galeria de trabalhos', 'camera', 'Fotos no app da cliente'], ['config', 'Configurações', 'gear', 'Studio, regras, segurança'], ['privacidade', 'Privacidade (LGPD)', 'shield', 'Aceites e pedidos']];
   function rota() { const h = (location.hash || '#/inicio').slice(2).split('?')[0].split('/'); return { r: h[0] || 'inicio', arg: h[1] }; }
   function qs() { return new URLSearchParams((location.hash.split('?')[1]) || ''); }
 
@@ -70,10 +74,10 @@
         <div class="sep"></div>
         ${MAIS.map(([k, l, i]) => `<a href="#/${k}" class="${ativo(k)}">${ic(i)} ${l}${n(k)}</a>`).join('')}
         <div class="sep"></div>
-        <a href="/cliente/" target="_blank">${ic('heart')} App da cliente</a>
+        <a href="cliente/" target="_blank">${ic('heart')} App da cliente</a>
       </nav>
       <div class="pe">
-        <div class="row"><button class="btn-ic" onclick="P.tema()" title="Modo claro/escuro">${ic(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')}</button><button class="btn-ic" onclick="P.sair()" title="Sair">${ic('out')}</button></div>
+        <div class="row"><button class="btn-ic" onclick="P.tema()" title="Modo claro/escuro">${icTema()}</button><button class="btn-ic" onclick="P.sair()" title="Sair">${ic('out')}</button></div>
         <div class="nexo-ass" style="text-align:left;padding:10px 4px 0">Desenvolvido por <b>Nexosys</b></div>
       </div>
     </aside>
@@ -82,7 +86,7 @@
     </nav>`;
   }
   // No celular a barra tem 5 itens; "Mais" fica no topo de cada tela.
-  const topo = (titulo, sub, direita) => `<div class="topo"><div class="grow"><h1>${titulo}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="row">${direita || ''}${sinoBtn()}<a class="btn-ic mais-m" href="#/mais" title="Mais" aria-label="Mais opções">${ic('more')}</a></div></div>`;
+  const topo = (titulo, sub, direita) => `<div class="topo"><div class="grow"><h1>${titulo}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="row">${direita || ''}<button class="btn-ic tema-m" onclick="P.tema()" aria-label="Modo claro/escuro" title="Modo claro/escuro">${icTema()}</button>${sinoBtn()}<a class="btn-ic mais-m" href="#/mais" title="Mais" aria-label="Mais opções">${ic('more')}</a></div></div>`;
   function sinoBtn() { const n = D().notificacoes.filter(x => x.para === 'dona' && !x.lida).length; return `<button class="btn-ic" style="position:relative" onclick="P.notifs()" aria-label="Notificações">${ic('bell')}${n ? `<span class="pill-n" style="top:2px;right:2px">${n}</span>` : ''}</button>`; }
 
   const TELAS = {};
@@ -100,7 +104,11 @@
     window.scrollTo({ top: P._manterScroll ? window.scrollY : 0 }); P._manterScroll = false;
   }
   function rerender() { P._manterScroll = true; const y = scrollY; render(); scrollTo(0, y); }
-  P.tema = () => { UI.tema('alternar'); rerender(); };
+  P.tema = () => {
+    UI.tema('alternar');
+    if (!sessaoOK()) { const b = $('#tema-b'); if (b) b.innerHTML = icTema(); return; } // tela de login: só troca o ícone, sem apagar o que foi digitado
+    rerender();
+  };
 
   P.notifs = () => {
     const db = D(); const l = db.notificacoes.filter(x => x.para === 'dona');
@@ -206,14 +214,15 @@
     const fila = (db.filaWhats || []).filter(w => !w.enviado);
     const agoraAbs = N.absAgora();
 
-    return topo(`${saud}!`, `${N.fmtDataLonga(hj)} · ${doDia.length} atendimento${doDia.length === 1 ? '' : 's'} hoje`) + `
-    <div class="grid g4 mb">
-      <div class="card kpi"><div class="l">Hoje</div><div class="v">${N.fmtMoeda(fd.total)}</div><div class="d">+ ${N.fmtMoeda(previsto)} previsto</div></div>
-      <div class="card kpi"><div class="l">Semana</div><div class="v">${N.fmtMoeda(fs.total)}</div><div class="d">${fs.qtd} atendimentos</div></div>
-      <div class="card kpi"><div class="l">Mês</div><div class="v">${N.fmtMoeda(fm.total)}</div><div class="d">${fm.qtd} atendimentos</div></div>
-      <div class="card kpi"><div class="l">Ticket médio</div><div class="v">${N.fmtMoeda(fm.ticket)}</div><div class="d">no mês</div></div>
-    </div>
-    <div class="grid g2 mb">
+    // Ordem pensada para o celular: pedidos pendentes (o que pede ação) primeiro, depois o dia, depois os números.
+    const secPedidos = `
+      <section class="card${pend.length ? ' destaque' : ''}"><div class="card-h"><h3>Pedidos para aprovar</h3>${pend.length ? `<span class="badge st-pendente">${pend.length}</span>` : ''}</div>
+        ${pend.length ? `<div class="lista">${pend.map(a => { const c = N.cliente(db, a.clienteId) || {}; return `<div class="ped">
+          <div class="ped-info" onclick="P.abrirAg('${a.id}')"><div class="avatar sm">${iniciais(c.nome)}</div><div class="grow"><div class="t ellip">${esc(c.nome)}</div><div class="quando">${diaCurto(a.data)} · ${a.hora}</div><div class="s ellip">${esc(N.nomesServ(db, a.servicoIds))}</div></div></div>
+          <div class="ped-acoes"><button class="btn sec sm" onclick="P.recusar('${a.id}')">${ic('x')} Recusar</button><button class="btn sm ok" onclick="P.aprovar('${a.id}')">${ic('check')} Aprovar</button></div></div>`; }).join('')}</div>` : `<div class="vazio">${ic('check')}<p>Tudo em dia! Nenhum pedido pendente.</p></div>`}
+      </section>
+`;
+    const secHoje = `
       <section class="card"><div class="card-h"><h3>Hoje</h3><a class="btn ghost sm" href="#/agenda">Agenda ${ic('right')}</a></div>
         ${doDia.length ? `<div class="timeline">${doDia.map(a => {
           const c = N.cliente(db, a.clienteId) || {}; const i = N.abs(a.data, a.hora), f = i + a.duracao;
@@ -223,9 +232,14 @@
             ${a.status === 'confirmado' && agoraAbs >= i ? `<button class="btn sm ok" onclick="event.stopPropagation();P.concluir('${a.id}')">Concluir</button>` : ''}</div></div>`;
         }).join('')}</div>` : `<div class="vazio">${ic('cal')}<p>Nenhum atendimento hoje.</p><a class="btn sm mt-s" href="#/novo">Novo atendimento</a></div>`}
       </section>
-      <section class="card"><div class="card-h"><h3>Pedidos para aprovar</h3>${pend.length ? `<span class="badge st-pendente">${pend.length}</span>` : ''}</div>
-        ${pend.length ? `<div class="lista">${pend.map(a => { const c = N.cliente(db, a.clienteId) || {}; return `<div class="item"><div class="avatar sm">${iniciais(c.nome)}</div><div class="grow" style="cursor:pointer" onclick="P.abrirAg('${a.id}')"><div class="t ellip">${esc(c.nome)}</div><div class="s">${N.fmtData(a.data)} · ${a.hora} · ${esc(N.nomesServ(db, a.servicoIds))}</div></div><button class="btn-ic" title="Recusar" onclick="P.recusar('${a.id}')">${ic('x')}</button><button class="btn sm ok" onclick="P.aprovar('${a.id}')">${ic('check')}<span class="sr">Aprovar</span></button></div>`; }).join('')}</div>` : `<div class="vazio">${ic('check')}<p>Tudo em dia! Nenhum pedido pendente.</p></div>`}
-      </section>
+`;
+    return topo(`${saud}!`, `${N.fmtDataLonga(hj)} · ${doDia.length} atendimento${doDia.length === 1 ? '' : 's'} hoje`) + `
+    <div class="grid g2 mb" style="align-items:start">${pend.length ? secPedidos + secHoje : secHoje + secPedidos}</div>
+    <div class="grid g4 mb">
+      <div class="card kpi"><div class="l">Hoje</div><div class="v">${N.fmtMoeda(fd.total)}</div><div class="d">+ ${N.fmtMoeda(previsto)} previsto</div></div>
+      <div class="card kpi"><div class="l">Semana</div><div class="v">${N.fmtMoeda(fs.total)}</div><div class="d">${fs.qtd} atendimentos</div></div>
+      <div class="card kpi"><div class="l">Mês</div><div class="v">${N.fmtMoeda(fm.total)}</div><div class="d">${fm.qtd} atendimentos</div></div>
+      <div class="card kpi"><div class="l">Ticket médio</div><div class="v">${N.fmtMoeda(fm.ticket)}</div><div class="d">no mês</div></div>
     </div>
     <div class="grid g2 mb">
       <section class="card"><div class="card-h"><h3>Serviços mais vendidos</h3><span class="small muted">últimos 30 dias</span></div>
@@ -738,7 +752,7 @@
   P.salvarStudio = () => { const f = Object.fromEntries(new FormData($('#st-f')).entries()); const db = D(); Object.assign(db.studio, { nome: f.nome.trim() || '[NOME DO STUDIO]', slogan: f.slogan.trim(), endereco: f.endereco.trim(), whatsapp: N.soDigitos(f.whatsapp), instagram: f.instagram.trim() }); N.save(db); toast('Dados do studio salvos.'); rerender(); };
   P.logo = async inp => { const f = inp.files[0]; if (!f) return; try { const u = await UI.arquivoParaDataURL(f, 256); P.cfg('studio.logo', u); rerender(); } catch (e) { toast('Imagem inválida.', 'erro'); } };
   P.ativarNotif = async () => { if (Notification.permission !== 'granted' && !await UI.pedirNotificacoes()) return rerender(); UI.notificarSistema('Notificações ativas', 'Você vai receber os novos pedidos de agendamento aqui.'); rerender(); };
-  P.copiarLink = () => { const u = location.origin + '/cliente/'; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast('Link copiado: ' + u)).catch(() => prompt('Copie o link:', u)); };
+  P.copiarLink = () => { const u = location.origin + UI.BASE + 'cliente/'; (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast('Link copiado: ' + u)).catch(() => prompt('Copie o link:', u)); };
   P.resetDemo = async () => { if (!await confirmar('Restaurar os dados de demonstração? Tudo o que foi alterado será perdido.', { perigo: true, sim: 'Restaurar' })) return; N.reset(); S.novo = null; toast('Dados de demonstração restaurados.'); render(); };
   P.trocarSenha = () => {
     const db = D(); if (N.hash($('#sg-a').value) !== db.seguranca.senhaHash) return toast('Senha atual incorreta.', 'erro');
@@ -803,11 +817,39 @@
     $('#dc-ok', m).onclick = () => { const v = $('#dc-v', m).value.trim(); if (!v || v === d.versao) return toast('Informe uma versão diferente.', 'erro'); const d2 = D(); d2[k] = { versao: v, data: H(), texto: $('#dc-t', m).value }; if (k === 'termos' && d2.privacidade.versao !== v) { /* mantém versões independentes */ } N.logLGPD(d2, 'dona', 'Nova versão publicada', `${k === 'termos' ? 'Termos de Uso' : 'Política de Privacidade'} v${v}`); N.save(d2); toast('Nova versão publicada.'); fecharERender(); };
   };
 
+  /* ============================ GALERIA ============================ */
+  TELAS.galeria = db => {
+    const g = db.galeria || []; const temEx = g.some(f => f.exemplo);
+    return topo('Galeria', `${g.length} foto${g.length === 1 ? '' : 's'} no app`, `<label class="btn sm">${ic('plus')} Adicionar<input type="file" accept="image/*" multiple class="hide" onchange="P.galAdd(this)"></label>`) + `
+    <p class="dica mb">Publique só fotos de clientes que <b>autorizaram o uso de imagem</b>. As fotos aparecem na tela inicial do app, nesta ordem.</p>
+    ${temEx ? `<div class="card mb col" style="align-items:flex-start;gap:10px"><div><b>As imagens com a etiqueta “Ilustração” são de exemplo</b><div class="small muted">Troque pelas fotos do seu trabalho.</div></div><button class="btn sec sm" onclick="P.galLimparEx()">${ic('trash')} Remover exemplos</button></div>` : ''}
+    ${g.length ? `<div class="gal-adm">${g.map((f, i) => `<figure class="card">
+      <div class="gal-img"><img src="${esc(f.url)}" alt="${esc(f.legenda)}" loading="lazy">${f.exemplo ? '<span class="gal-tag">Ilustração</span>' : ''}</div>
+      <figcaption><span class="ellip grow">${esc(f.legenda) || '<span class="soft">Sem legenda</span>'}</span></figcaption>
+      <div class="row sp"><div class="row" style="gap:2px"><button class="btn-ic" ${i ? '' : 'disabled'} onclick="P.galMover('${f.id}',-1)" aria-label="Mover para antes">${ic('left')}</button><button class="btn-ic" ${i < g.length - 1 ? '' : 'disabled'} onclick="P.galMover('${f.id}',1)" aria-label="Mover para depois">${ic('right')}</button></div>
+        <div class="row" style="gap:2px"><button class="btn-ic" onclick="P.galLegenda('${f.id}')" aria-label="Editar legenda">${ic('edit')}</button><button class="btn-ic" onclick="P.galDel('${f.id}')" aria-label="Apagar foto">${ic('trash')}</button></div></div>
+    </figure>`).join('')}</div>` : `<div class="card vazio">${ic('camera')}<p>Nenhuma foto ainda. Adicione fotos do seu trabalho para mostrar no app.</p></div>`}`;
+  };
+  P.galAdd = async inp => {
+    const fs = [...inp.files]; if (!fs.length) return;
+    const db = D(); db.galeria = db.galeria || []; let n = 0;
+    for (const f of fs) { try { db.galeria.unshift({ id: N.uid('g'), url: await UI.arquivoParaDataURL(f, 900), legenda: '', em: N.isoAgora() }); n++; } catch (e) { toast(`Não deu para abrir ${f.name}.`, 'erro'); } }
+    N.save(db); if (n) toast(n === 1 ? 'Foto adicionada. Toque no lápis para pôr a legenda.' : `${n} fotos adicionadas.`); rerender();
+  };
+  P.galLegenda = id => {
+    const f = (D().galeria || []).find(x => x.id === id); if (!f) return;
+    const m = modal(`<form class="col" id="gl-f"><label class="f"><span>Legenda (ex.: nome do serviço)</span><input class="inp" name="l" maxlength="60" value="${esc(f.legenda)}" autofocus></label><div class="acoes"><button class="btn">Salvar</button></div></form>`, { titulo: 'Legenda da foto' });
+    $('#gl-f', m).onsubmit = e => { e.preventDefault(); const db = D(); db.galeria.find(x => x.id === id).legenda = e.target.l.value.trim(); N.save(db); m.fechar(); rerender(); };
+  };
+  P.galMover = (id, d) => { const db = D(); const g = db.galeria; const i = g.findIndex(x => x.id === id), j = i + d; if (i < 0 || j < 0 || j >= g.length) return; [g[i], g[j]] = [g[j], g[i]]; N.save(db); rerender(); };
+  P.galDel = async id => { if (!await confirmar('Apagar esta foto da galeria?', { sim: 'Apagar', perigo: true })) return; const db = D(); db.galeria = db.galeria.filter(x => x.id !== id); N.save(db); toast('Foto apagada.'); rerender(); };
+  P.galLimparEx = async () => { if (!await confirmar('Remover as imagens de exemplo da galeria?', { sim: 'Remover', perigo: true })) return; const db = D(); db.galeria = db.galeria.filter(x => !x.exemplo); N.save(db); toast('Exemplos removidos.'); rerender(); };
+
   /* ============================ MAIS ============================ */
   TELAS.mais = db => topo('Mais', '') + `<div class="mais-grid">${MAIS.map(([k, l, i, s]) => `<a class="card" href="#/${k}">${ic(i)}<b>${l}</b><span>${s}</span></a>`).join('')}
-    <a class="card" href="/cliente/" target="_blank">${ic('heart')}<b>App da cliente</b><span>Ver como a cliente vê</span></a>
+    <a class="card" href="cliente/" target="_blank">${ic('heart')}<b>App da cliente</b><span>Ver como a cliente vê</span></a>
     <a class="card" href="javascript:UI.instalar()">${ic('down')}<b>Instalar painel</b><span>Ícone na tela inicial</span></a>
-    <a class="card" href="javascript:P.tema()">${ic('moon')}<b>Modo escuro</b><span>Alternar aparência</span></a>
+    <a class="card" href="javascript:P.tema()">${icTema()}<b>${escuro() ? 'Modo claro' : 'Modo escuro'}</b><span>Alternar aparência</span></a>
     <a class="card" href="javascript:P.sair()">${ic('out')}<b>Sair</b><span>Encerrar sessão</span></a></div>`;
 
   /* ============================ Inicialização ============================ */
@@ -815,7 +857,7 @@
   N.onChange(() => {
     const db = D(); const novas = db.notificacoes.filter(n => n.para === 'dona' && !vistos.has(n.id));
     db.notificacoes.forEach(n => vistos.add(n.id));
-    novas.forEach(n => { toast(n.titulo + ': ' + n.texto); UI.notificarSistema(n.titulo, n.texto, '/#/inicio'); });
+    novas.forEach(n => { toast(n.titulo + ': ' + n.texto); UI.notificarSistema(n.titulo, n.texto, UI.BASE + '#/inicio'); });
     if (!sessaoOK()) return;
     const ativo = document.activeElement; const digitando = ativo && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName);
     if (novas.length && !document.querySelector('.modal-bg') && !digitando) rerender();

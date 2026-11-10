@@ -29,34 +29,72 @@
   function render() {
     const db = D(); const { r, arg } = rota();
     depois = null;
+    if (!eu(db)) return portao(db, r);
     app.innerHTML = shell(r, (T[r] || T.inicio)(db, arg), db);
     document.title = db.studio.nome + ' · Agendamento';
     if (depois) depois();
     verificarTermos(db);
   }
   const rerender = () => { const y = scrollY; render(); scrollTo(0, y); };
-  C.tema = () => { UI.tema('alternar'); rerender(); };
+  const icTema = () => ic(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon');
+  C.tema = () => {
+    UI.tema('alternar');
+    if (!eu()) { const b = $('#tema-b'); if (b) b.innerHTML = icTema(); return; } // no portão, não redesenha para não perder o que foi digitado
+    rerender();
+  };
+
+  /* ============================ PORTÃO (sem login) ============================
+     Sem conta conectada, o app inteiro fica atrás desta tela: só dá para entrar,
+     criar conta, recuperar acesso ou ler os termos. */
+  function portao(db, r) {
+    document.title = db.studio.nome + ' · Entrar';
+    const pe = `<div class="nexo-ass">Desenvolvido por <b>Nexosys</b></div>`;
+    if (r === 'termos') {
+      app.innerHTML = `<div class="cli portao"><a class="btn ghost" style="margin-left:-12px;margin-top:14px" href="#/">${ic('left')} Voltar</a>${T.termos(db)}${pe}</div>`;
+      return;
+    }
+    app.innerHTML = `<div class="cli portao">
+      <div class="portao-top"><button class="btn-ic" id="tema-b" onclick="C.tema()" aria-label="Modo claro/escuro">${icTema()}</button></div>
+      <section class="hero">${UI.logoStudio(db, 76)}<h1>${esc(db.studio.nome)}</h1><p>${esc(db.studio.slogan)}</p></section>
+      <div class="card portao-card" id="au"></div>
+      <p class="small muted mt" style="text-align:center"><a href="#/termos">Termos de Uso</a> · <a href="#/termos">Política de Privacidade</a></p>
+      ${pe}</div>`;
+    montarAuth($('#au'), S.modoAuth || 'entrar', () => { S.modoAuth = null; render(); scrollTo(0, 0); }, md => (S.modoAuth = md));
+  }
 
   /* ============================ VITRINE ============================ */
   T.inicio = db => {
-    const c = eu(db); const prox = c && N.proximoHorario(db, c.id); const man = c && N.manutencao(db, c.id);
+    const c = eu(db); const prox = N.proximoHorario(db, c.id); const man = N.manutencao(db, c.id);
+    const ult = N.ultimaVisita(db, c.id);
     const servs = db.servicos.filter(s => s.visivel);
     const st = db.studio;
     const horarioTxt = [1, 2, 3, 4, 5, 6, 0].map(d => { const h = db.horario[d]; return `<div class="lp"><span style="color:var(--text);font-size:14px">${N.DIAS[d]}</span><b>${h.aberto ? `${h.ini} – ${h.fim}` : '<span class="soft">Fechado</span>'}</b></div>`; }).join('');
+    // Um único botão principal. Se já está na hora da manutenção, ele já leva para esse serviço.
+    const sugerida = !prox && man && man.naHora ? man.servico : null;
+    const repetir = !prox && !sugerida && ult && ult.servicoIds.length ? ult : null;
+    const acao = !db.regras.online
+      ? `<a class="btn lg" target="_blank" rel="noopener" href="${N.waLink(st.whatsapp, 'Olá! Gostaria de agendar um horário.')}">${ic('whats')} Agendar pelo WhatsApp</a><p class="small mt-s">O agendamento online está pausado no momento.</p>`
+      : sugerida
+        ? `<div class="lembrete-ret">${ic('spark')}<div class="grow"><b>Já está na hora da sua manutenção</b><div class="small muted">${esc(sugerida.nome)} · última há ${man.dias} dias</div></div></div>
+           <button class="btn lg bloco mt-s" onclick="C.agendarServ('${sugerida.id}')">${ic('cal')} Agendar ${esc(sugerida.nome.toLowerCase())}</button>
+           <a class="btn ghost bloco" href="#/agendar">Escolher outro serviço</a>`
+        : `<a class="btn lg bloco" href="#/agendar">${ic('cal')} ${prox ? 'Agendar outro horário' : 'Agendar horário'}</a>
+           ${repetir ? `<button class="btn ghost bloco" onclick="C.repetir()">${ic('clock')} Repetir: ${esc(N.nomesServ(db, repetir.servicoIds))}</button>` : ''}`;
     return `
-    <section class="hero">${UI.logoStudio(db, 76)}
-      <h1>${c ? `Oi, ${esc(c.nome.split(' ')[0])}!` : 'Seja bem-vinda'}</h1>
-      <p>${esc(st.slogan)}</p>
-      ${db.regras.online ? `<a class="btn lg" href="#/agendar">${ic('cal')} Agendar</a>` : `<a class="btn lg" target="_blank" rel="noopener" href="${N.waLink(st.whatsapp, 'Olá! Gostaria de agendar um horário.')}">${ic('whats')} Agendar pelo WhatsApp</a><p class="small mt-s">O agendamento online está pausado no momento.</p>`}
-    </section>
-    ${prox ? `<a class="prox" href="#/horarios" style="display:block;text-decoration:none;color:inherit"><div class="row sp"><span class="small muted">Seu próximo horário</span>${badge(prox.status)}</div><div class="quando">${N.fmtDataLonga(prox.data)} · ${prox.hora}</div><div class="small muted">${esc(N.nomesServ(db, prox.servicoIds))}</div></a>` : ''}
-    ${man && man.naHora && !prox ? `<div class="lembrete-ret">${ic('spark')}<div class="grow"><b>Já está na hora da sua manutenção</b><div class="small muted">${esc(man.servico.nome)} há ${man.dias} dias</div></div><button class="btn sm" onclick="C.agendarServ('${man.servico.id}')">Agendar</button></div>` : ''}
+    <section class="ola"><h1>Oi, ${esc(c.nome.split(' ')[0])}!</h1><p>${esc(st.slogan)}</p></section>
+    ${prox ? `<a class="prox" href="#/horarios"><div class="row sp"><span class="small muted">Seu próximo horário</span>${badge(prox.status)}</div><div class="quando">${N.fmtDataLonga(prox.data)} · ${prox.hora}</div><div class="small muted">${esc(N.nomesServ(db, prox.servicoIds))}</div></a>` : ''}
+    <div class="acao-ini">${acao}</div>
 
-    <div class="sec-t"><h2>O que fazemos</h2></div>
-    <div class="servs">${servs.map(s => `<article class="serv-card"><span class="ico">${ic(s.icone || 'spark')}</span><h4>${esc(s.nome)}</h4><p>${esc(s.descricao)}</p><div class="row sp"><span class="pr">${s.preco ? N.fmtMoeda(s.preco) : 'Incluso'}</span><span class="tiny soft">${N.fmtDur(s.duracao)}</span></div></article>`).join('')}</div>
+    ${(db.galeria || []).length ? `<div class="sec-t"><h2>Nossos trabalhos</h2></div>
+    <div class="gal-faixa">${db.galeria.map((f, i) => `<button class="gal-it" onclick="C.foto(${i})" aria-label="Ver foto${f.legenda ? ': ' + esc(f.legenda) : ''}"><img src="${esc(f.url)}" alt="" loading="lazy">${f.exemplo ? '<span class="gal-tag">Ilustração</span>' : ''}${f.legenda ? `<span class="gal-leg">${esc(f.legenda)}</span>` : ''}</button>`).join('')}</div>` : ''}
 
-    <div class="sec-t"><h2>Valores</h2></div>
-    <div class="card precos">${servs.map(s => `<div class="lp"><div><div style="font-weight:500">${esc(s.nome)}</div><span>${N.fmtDur(s.duracao)} · retorno ${s.retornoMin}–${s.retornoMax} dias</span></div><b>${s.preco ? N.fmtMoeda(s.preco) : 'Incluso'}</b></div>`).join('')}</div>
+    <div class="sec-t"><h2>Serviços e valores</h2></div>
+    <div class="card serv-lista">${servs.map(s => `<button class="serv-li" onclick="C.agendarServ('${s.id}')" ${db.regras.online ? '' : 'disabled'}>
+      <span class="ico">${ic(s.icone || 'spark')}</span>
+      <span class="grow"><span class="row sp" style="align-items:baseline"><b class="nome">${esc(s.nome)}</b><b class="pr">${s.preco ? N.fmtMoeda(s.preco) : 'Incluso'}</b></span>
+        <span class="desc">${esc(s.descricao)}</span>
+        <span class="meta">${N.fmtDur(s.duracao)}${s.retornoMin ? ` · retorno em ${s.retornoMin}–${s.retornoMax} dias` : ''}</span></span></button>`).join('')}</div>
+    <p class="tiny soft mt-s" style="text-align:center">Toque em um serviço para agendar.</p>
 
     <div class="sec-t"><h2>Como funciona</h2></div>
     <div class="card passos3">
@@ -72,6 +110,20 @@
     <div class="card precos mt"><h4 class="mb-s">Horário de atendimento</h4>${horarioTxt}</div>
     <p class="small muted mt" style="text-align:center"><a href="#/termos">Termos de Uso</a> · <a href="#/termos">Política de Privacidade</a> · <a href="javascript:UI.instalar()">Instalar app</a></p>`;
   };
+  C.foto = i => {
+    const g = D().galeria || []; if (!g.length) return;
+    const m = modal(`<div class="foto-v"><button class="btn-ic fv-x" data-fechar aria-label="Fechar">${ic('x')}</button>
+      <button class="btn-ic fv-ant" aria-label="Foto anterior">${ic('left')}</button><figure><img alt=""><figcaption></figcaption></figure><button class="btn-ic fv-prox" aria-label="Próxima foto">${ic('right')}</button></div>`, { cheia: true });
+    const mostra = () => { const f = g[i]; $('img', m).src = f.url; $('figcaption', m).textContent = [f.legenda, f.exemplo ? 'imagem ilustrativa' : '', `${i + 1} de ${g.length}`].filter(Boolean).join(' · '); };
+    const vai = d => { i = (i + d + g.length) % g.length; mostra(); };
+    $('.fv-ant', m).onclick = () => vai(-1); $('.fv-prox', m).onclick = () => vai(1);
+    let x0 = null; m.addEventListener('touchstart', e => (x0 = e.touches[0].clientX), { passive: true });
+    m.addEventListener('touchend', e => { if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; if (Math.abs(dx) > 40) vai(dx < 0 ? 1 : -1); x0 = null; });
+    const tecla = e => { if (!document.body.contains(m)) return removeEventListener('keydown', tecla); if (e.key === 'ArrowLeft') vai(-1); if (e.key === 'ArrowRight') vai(1); if (e.key === 'Escape') m.fechar(); };
+    addEventListener('keydown', tecla);
+    mostra();
+  };
+  C.repetir = () => { const u = N.ultimaVisita(D(), eu().id); if (!u) return; S.ag = { passo: 2, servicoIds: u.servicoIds.slice(), data: null, mes: N.hoje().slice(0, 7), hora: null }; location.hash = '#/agendar'; };
   C.agendarServ = id => { S.ag = { passo: 2, servicoIds: [id], data: null, mes: N.hoje().slice(0, 7), hora: null }; location.hash = '#/agendar'; };
 
   T.termos = db => `<div class="etapa-h"><h2>Termos e privacidade</h2></div>
@@ -149,12 +201,10 @@
     const meus = db.agendamentos.filter(a => a.clienteId === c.id);
     const prox = meus.filter(a => ['pendente', 'confirmado'].includes(a.status) && N.abs(a.data, a.hora) + a.duracao > now);
     const ant = meus.filter(a => !prox.includes(a)).reverse();
-    const man = N.manutencao(db, c.id);
     const avaliado = id => db.avaliacoes.some(v => v.agendamentoId === id);
     const pendAval = ant.find(a => a.status === 'concluido' && !avaliado(a.id) && N.diffDias(a.data, N.hoje()) <= 30);
     return `<div class="etapa-h"><h2>Seus horários</h2></div>
       ${pendAval ? `<div class="card mb" style="border-color:var(--gold)"><div class="row"><span style="color:var(--gold)">${ic('star')}</span><div class="grow"><b>Como foi seu atendimento?</b><div class="small muted">${esc(N.nomesServ(db, pendAval.servicoIds))} em ${N.fmtData(pendAval.data)}</div></div><a class="btn sm" href="#/avaliar/${pendAval.id}">Avaliar</a></div></div>` : ''}
-      ${man && man.naHora && !prox.length ? `<div class="lembrete-ret mb">${ic('spark')}<div class="grow"><b>Já está na hora da sua manutenção</b><div class="small muted">${esc(man.servico.nome)} · última há ${man.dias} dias</div></div><button class="btn sm" onclick="C.agendarServ('${man.servico.id}')">Agendar</button></div>` : ''}
       <h3 class="mb-s">Próximos</h3>
       ${prox.length ? prox.map(a => {
         const pc = N.podeCancelar(db, a), pr = N.podeRemarcar(db, a);
@@ -166,7 +216,7 @@
           ${!pc || !pr ? `<p class="tiny soft mt-s">${!pr ? `Remarcação só até ${db.regras.remarcarH} h antes` : ''}${!pr && !pc ? ' e cancelamento' : !pc ? `Cancelamento só` : ''}${!pc ? ` até ${db.regras.cancelarH} h antes` : ''}. Precisa mudar? <a target="_blank" rel="noopener" href="${N.waLink(db.studio.whatsapp, `Olá! Preciso falar sobre meu horário de ${N.fmtData(a.data)} às ${a.hora}.`)}">Fale no WhatsApp</a>.</p>` : ''}</div>`;
       }).join('') : `<div class="card mb vazio">${ic('cal')}<p>Nenhum horário marcado.</p><a class="btn sm mt-s" href="#/agendar">Agendar agora</a></div>`}
       <h3 class="mb-s mt">Anteriores</h3>
-      <div class="card" style="padding:6px 14px">${ant.length ? `<div class="lista">${ant.slice(0, 30).map(a => `<div class="item"><div class="grow"><div class="t">${esc(N.nomesServ(db, a.servicoIds))}</div><div class="s">${N.fmtData(a.data)} · ${a.hora}</div></div>${a.status === 'concluido' && !avaliado(a.id) ? `<a class="btn sm sec" href="#/avaliar/${a.id}">Avaliar</a>` : a.status === 'concluido' ? estrelas((db.avaliacoes.find(v => v.agendamentoId === a.id) || {}).nota || 0) : badge(a.status)}</div>`).join('')}</div>` : '<p class="muted small" style="padding:10px 0">Ainda não há atendimentos anteriores.</p>'}</div>`;
+      <div class="card" style="padding:6px 14px">${ant.length ? `<div class="lista">${ant.slice(0, 30).map(a => `<div class="item"><div class="grow"><div class="t">${esc(N.nomesServ(db, a.servicoIds))}</div><div class="s">${N.fmtData(a.data)} · ${a.hora}</div></div>${a.status !== 'concluido' ? badge(a.status) : avaliado(a.id) ? estrelas((db.avaliacoes.find(v => v.agendamentoId === a.id) || {}).nota || 0) : ''}</div>`).join('')}</div>` : '<p class="muted small" style="padding:10px 0">Ainda não há atendimentos anteriores.</p>'}</div>`;
   };
   C.remarcar = id => { const db = D(); const a = db.agendamentos.find(x => x.id === id); if (!N.podeRemarcar(db, a)) return toast('Fora do prazo para remarcar.', 'erro'); S.ag = { passo: 2, servicoIds: a.servicoIds.slice(), data: null, mes: N.hoje().slice(0, 7), hora: null, remarcarId: id }; location.hash = '#/agendar'; };
   C.cancelar = async id => {
@@ -264,10 +314,17 @@
 
   function abrirAuth(modo) {
     return new Promise(res => {
-      let ok = false; let lido = false; let rec = null;
-      const m = modal('<div id="au"></div>', { titulo: '', aoFechar: () => res(ok) });
-      const w = $('#au', m);
-      const vai = md => { modo = md; desenha(); };
+      let ok = false;
+      const m = modal('<div id="au-m"></div>', { titulo: '', aoFechar: () => res(ok) });
+      montarAuth($('#au-m', m), modo, () => { ok = true; m.fechar(); });
+    });
+  }
+
+  /* Formulários de entrar / criar conta / recuperar, desenhados dentro de `w`.
+     `pronto` é chamado quando a cliente fica conectada. */
+  function montarAuth(w, modo, pronto, aoTrocar) {
+      let lido = false; let rec = null;
+      const vai = md => { modo = md; if (aoTrocar) aoTrocar(md); desenha(); };
       function desenha() {
         if (modo === 'entrar') w.innerHTML = `<h2 class="mb">Entrar</h2><form class="col" id="f">
           <label class="f"><span>WhatsApp ou e-mail</span><input class="inp" name="id" required autocomplete="username" autofocus></label>
@@ -306,7 +363,7 @@
         if (modo === 'entrar') {
           const c = acha(db, f.id);
           if (!c || !c.senhaHash || c.senhaHash !== N.hash(f.senha)) return toast(c && !c.senhaHash ? 'Sua ficha foi criada pelo studio. Use “Recuperar acesso” para criar uma senha.' : 'Dados de acesso incorretos.', 'erro');
-          setSessao(c.id); ok = true; toast(`Que bom te ver, ${c.nome.split(' ')[0]}!`); m.fechar();
+          setSessao(c.id); toast(`Que bom te ver, ${c.nome.split(' ')[0]}!`); pronto();
         } else if (modo === 'cadastro') {
           if (!lido || !f.aceite) return toast('Leia e aceite os termos para continuar.', 'erro');
           const zap = N.soDigitos(f.whatsapp); if (zap.length < 10) return toast('Informe o WhatsApp com DDD.', 'erro');
@@ -320,17 +377,16 @@
           if (f.fotos) db.lgpd.aceites.push({ id: N.uid('a'), clienteId: c.id, doc: 'Consentimento de fotos', versao: '—', em, origem: 'app' });
           if (f.marketing) db.lgpd.aceites.push({ id: N.uid('a'), clienteId: c.id, doc: 'Mensagens de marketing', versao: '—', em, origem: 'app' });
           N.notificar(db, 'dona', 'Nova cliente cadastrada', c.nome);
-          N.save(db); setSessao(c.id); ok = true; toast('Conta criada! Bem-vinda 💕'); m.fechar();
+          N.save(db); setSessao(c.id); toast('Conta criada! Bem-vinda 💕'); pronto();
         } else if (!rec) {
           const c = acha(db, f.id); rec = { codigo: String(Math.floor(100000 + Math.random() * 900000)), id: c && c.id };
           toast('Se houver uma conta, enviamos o código.'); desenha();
         } else {
           if (f.codigo !== rec.codigo || !rec.id) return toast('Código inválido.', 'erro');
-          const c = N.cliente(db, rec.id); c.senhaHash = N.hash(f.senha); N.save(db); setSessao(c.id); ok = true; toast('Senha alterada. Você já está conectada.'); m.fechar();
+          const c = N.cliente(db, rec.id); c.senhaHash = N.hash(f.senha); N.save(db); setSessao(c.id); toast('Senha alterada. Você já está conectada.'); pronto();
         }
       }
       desenha();
-    });
   }
 
   /* ============================ MEUS DADOS (LGPD) ============================ */
@@ -399,7 +455,7 @@
         const c = eu(db); if (!c || c.senhaHash !== N.hash(v.s)) { toast('Senha incorreta.', 'erro'); return; }
         const id = c.id; db.lgpd.pedidos.push({ id: N.uid('p'), clienteId: id, tipo: 'exclusao', detalhe: 'Encerramento de conta pelo app', em: N.isoAgora(), prazo: N.hoje(), status: 'atendido', resposta: 'Dados pessoais apagados automaticamente; financeiro anonimizado.', atendidoEm: N.isoAgora() });
         N.anonimizarCliente(db, id, 'cliente'); N.notificar(db, 'dona', 'Conta encerrada (LGPD)', 'Uma cliente encerrou a conta e teve os dados apagados.'); N.save(db);
-        setSessao(null); m.fechar(); toast('Sua conta foi encerrada e seus dados apagados.'); location.hash = '#/';
+        setSessao(null); m.fechar(); toast('Sua conta foi encerrada e seus dados apagados.'); location.hash = '#/'; render();
       });
     };
   };
@@ -410,7 +466,8 @@
     const db = D(); const c = eu(db);
     const novas = c ? db.notificacoes.filter(n => n.para === c.id && !vistos.has(n.id)) : [];
     db.notificacoes.forEach(n => vistos.add(n.id));
-    novas.forEach(n => { toast(n.titulo + ' — ' + n.texto); UI.notificarSistema(n.titulo, n.texto, '/cliente/#/horarios'); });
+    if (!c) return; // no portão não há nada a atualizar, e redesenhar apagaria o formulário
+    novas.forEach(n => { toast(n.titulo + ' — ' + n.texto); UI.notificarSistema(n.titulo, n.texto, UI.BASE + 'cliente/#/horarios'); });
     const ativo = document.activeElement;
     if (!document.querySelector('.modal-bg') && !(ativo && /INPUT|TEXTAREA|SELECT/.test(ativo.tagName))) rerender();
   });
