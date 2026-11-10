@@ -20,7 +20,7 @@
         <div class="row" style="gap:2px"><button class="btn-ic" onclick="C.tema()" aria-label="Modo claro/escuro">${ic(document.documentElement.dataset.theme === 'dark' ? 'sun' : 'moon')}</button>
         <a class="btn-ic" href="#/conta" aria-label="Minha conta">${c ? `<span class="avatar sm">${iniciais(c.nome)}</span>` : ic('user')}</a></div></header>
       ${html}
-      <div class="nexo-ass">Desenvolvido por <b>Nexosys</b></div>
+      ${UI.assinatura()}
     </div>
     <nav class="cnav">${[['', 'inicio', 'Início', 'home'], ['agendar', 'agendar', 'Agendar', 'cal'], ['horarios', 'horarios', 'Horários', 'clock'], ['conta', 'conta', 'Conta', 'user']].map(([h, k, l, i]) => `<a href="#/${h}" class="${on(k)}">${ic(i)}<span>${l}</span></a>`).join('')}</nav>`;
   }
@@ -48,7 +48,7 @@
      criar conta, recuperar acesso ou ler os termos. */
   function portao(db, r) {
     document.title = db.studio.nome + ' · Entrar';
-    const pe = `<div class="nexo-ass">Desenvolvido por <b>Nexosys</b></div>`;
+    const pe = UI.assinatura();
     if (r === 'termos') {
       app.innerHTML = `<div class="cli portao"><a class="btn ghost" style="margin-left:-12px;margin-top:14px" href="#/">${ic('left')} Voltar</a>${T.termos(db)}${pe}</div>`;
       return;

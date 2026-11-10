@@ -101,6 +101,17 @@
   const iniciais = nome => (nome || '?').split(' ').filter(Boolean).slice(0, 2).map(x => x[0]).join('').toUpperCase();
   const badge = st => `<span class="badge st-${st}">${Nexo.STATUS[st] || st}</span>`;
 
+  /* Assinatura Nexosys — aparece discreta no rodapé dos dois apps.
+     Para ativar o link do Instagram no lançamento, preencha o @ abaixo (sem o "@"). */
+  const NEXOSYS = { nome: 'Nexosys', instagram: '' };
+  function assinatura(alinhar) {
+    const ig = NEXOSYS.instagram.replace(/^@/, '').trim();
+    const icone = ig
+      ? `<a class="nexo-ig" href="https://instagram.com/${encodeURIComponent(ig)}" target="_blank" rel="noopener" aria-label="Instagram da ${NEXOSYS.nome}" title="@${esc(ig)} no Instagram">${ic('insta')}</a>`
+      : `<span class="nexo-ig" aria-hidden="true" title="Instagram da ${NEXOSYS.nome} (em breve)">${ic('insta')}</span>`;
+    return `<div class="nexo-ass"${alinhar === 'esq' ? ' style="justify-content:flex-start;padding:10px 4px 0"' : ''}><span>Desenvolvido por <b>${NEXOSYS.nome}</b></span>${icone}</div>`;
+  }
+
   /* PWA + notificações do sistema */
   // Pasta onde o app está publicado: "/" no servidor local, "/studio-sobrancelhas/" no GitHub Pages.
   const BASE = location.pathname.replace(/cliente\/.*$/, '').replace(/[^/]*$/, '');
@@ -174,5 +185,5 @@
     return grupos.map(([n, f]) => { const l = lista.filter(f); return l.length ? `<div class="slot-grupo">${n}</div><div class="slots">${l.map(h => `<button type="button" class="slot ${h === sel ? 'on' : ''}" onclick="${onClick}('${h}')">${h}</button>`).join('')}</div>` : ''; }).join('');
   }
 
-  g.UI = { BASE, calendario, gradeSlots, esc, $, $$, ic, logoSVG, logoStudio, toast, modal, confirmar, fecharModais, tema, estrelas, iniciais, badge, pwa, pedirNotificacoes, notificarSistema, instalar, arquivoParaDataURL, mascaraFone };
+  g.UI = { BASE, assinatura, calendario, gradeSlots, esc, $, $$, ic, logoSVG, logoStudio, toast, modal, confirmar, fecharModais, tema, estrelas, iniciais, badge, pwa, pedirNotificacoes, notificarSistema, instalar, arquivoParaDataURL, mascaraFone };
 })(window);

@@ -37,7 +37,7 @@
         </form>`}
       </div>
       <p class="mt small" style="text-align:center"><a href="cliente/">Abrir o app da cliente →</a></p>
-      <div class="nexo-ass">Desenvolvido por <b>Nexosys</b></div>
+      ${UI.assinatura()}
     </div></div>`;
   }
   P.entrar = () => {
@@ -80,10 +80,10 @@
       </nav>
       <div class="pe">
         <div class="row"><button class="btn-ic" onclick="P.tema()" title="Modo claro/escuro">${icTema()}</button><button class="btn-ic" onclick="P.sair()" title="Sair">${ic('out')}</button></div>
-        <div class="nexo-ass" style="text-align:left;padding:10px 4px 0">Desenvolvido por <b>Nexosys</b></div>
+        ${UI.assinatura('esq')}
       </div>
     </aside>
-    <main class="main" id="main">${conteudo}<div class="nexo-ass">Desenvolvido por <b>Nexosys</b></div></main>
+    <main class="main" id="main">${conteudo}${UI.assinatura()}</main>
     <nav class="bnav">${MENU.map(([k, l, i]) => k === 'novo' ? `<a href="#/novo" class="novo" aria-label="Novo atendimento"><span class="bola">${ic('plus')}</span></a>` : `<a href="#/${k}" class="${ativo(k)}">${ic(i)}<span>${l}</span>${n(k)}</a>`).join('').replace(`<a href="#/caixa"`, `<a href="#/caixa"`)}
     </nav>`;
   }
