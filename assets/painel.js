@@ -87,8 +87,9 @@
     <nav class="bnav">${MENU.map(([k, l, i]) => k === 'novo' ? `<a href="#/novo" class="novo" aria-label="Novo atendimento"><span class="bola">${ic('plus')}</span></a>` : `<a href="#/${k}" class="${ativo(k)}">${ic(i)}<span>${l}</span>${n(k)}</a>`).join('').replace(`<a href="#/caixa"`, `<a href="#/caixa"`)}
     </nav>`;
   }
-  // No celular a barra tem 5 itens; "Mais" fica no topo de cada tela.
-  const topo = (titulo, sub, direita) => `<div class="topo"><div class="grow"><h1>${titulo}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="row">${direita || ''}<button class="btn-ic tema-m" onclick="P.tema()" aria-label="Modo claro/escuro" title="Modo claro/escuro">${icTema()}</button>${sinoBtn()}<a class="btn-ic mais-m" href="#/mais" title="Mais" aria-label="Mais opções">${ic('more')}</a></div></div>`;
+  // No celular a barra tem 5 itens; "Mais" fica no canto superior esquerdo de cada tela.
+  // semMais: telas que já têm seta de voltar no canto esquerdo (ex.: ficha da cliente)
+  const topo = (titulo, sub, direita, semMais) => `<div class="topo">${semMais ? '' : `<a class="btn-ic mais-m" href="#/mais" title="Mais" aria-label="Mais opções">${ic('more')}</a>`}<div class="grow"><h1>${titulo}</h1>${sub ? `<div class="sub">${sub}</div>` : ''}</div><div class="row">${direita || ''}<button class="btn-ic tema-m" onclick="P.tema()" aria-label="Modo claro/escuro" title="Modo claro/escuro">${icTema()}</button>${sinoBtn()}</div></div>`;
   function sinoBtn() { const n = D().notificacoes.filter(x => x.para === 'dona' && !x.lida).length; return `<button class="btn-ic" style="position:relative" onclick="P.notifs()" aria-label="Notificações">${ic('bell')}${n ? `<span class="pill-n" style="top:2px;right:2px">${n}</span>` : ''}</button>`; }
 
   const TELAS = {};
@@ -566,7 +567,7 @@
         <h4 class="mt mb-s">Registro de aceites</h4>${ac.length ? ac.map(a => `<div class="small muted">${N.fmtDataHora(a.em)} — ${esc(a.doc)} ${a.versao !== '—' ? 'v' + a.versao : ''}${a.revogado ? ' (revogado)' : ''}</div>`).join('') : '<p class="small muted">Nenhum.</p>'}
         <div class="row wrap mt"><button class="btn sec sm" onclick="P.baixarDados('${id}')">${ic('down')} Exportar dados (LGPD)</button><button class="btn sm perigo" onclick="P.excluirCliente('${id}')">${ic('trash')} Excluir dados pessoais</button></div>`;
     }
-    return topo(`<a href="#/clientes" class="btn-ic" style="margin-left:-10px" aria-label="Voltar">${ic('left')}</a>`, '') + `
+    return topo(`<a href="#/clientes" class="btn-ic" style="margin-left:-10px" aria-label="Voltar">${ic('left')}</a>`, '', undefined, true) + `
     <div class="card mb"><div class="ficha-top"><div class="avatar">${iniciais(c.nome)}</div><div class="grow"><h2>${esc(c.nome)}</h2><div class="small muted">${N.fmtFone(c.whatsapp)}${c.email ? ' · ' + esc(c.email) : ''}</div>
       ${avs.length ? `<div class="mt-s">${estrelas(avs.reduce((s, v) => s + v.nota, 0) / avs.length)}</div>` : ''}</div><button class="btn-ic" onclick="P.editarCliente('${id}')" aria-label="Editar">${ic('edit')}</button></div>
       <div class="row wrap mt"><a class="btn sm" href="#/novo?cliente=${id}">${ic('plus')} Agendar</a>${c.whatsapp ? `<a class="btn sm sec" target="_blank" rel="noopener" href="${N.waLink(c.whatsapp, 'Oi, ' + c.nome.split(' ')[0] + '! ')}">${ic('whats')} WhatsApp</a>` : ''}</div></div>
