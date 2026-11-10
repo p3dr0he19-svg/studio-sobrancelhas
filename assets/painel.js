@@ -52,6 +52,8 @@
   P.sair = async () => { if (await confirmar('Sair do painel neste aparelho?', { sim: 'Sair' })) { try { localStorage.removeItem('nexo_sessao_dona'); } catch (e) { } render(); } };
 
   /* ============================ Estrutura ============================ */
+  // Pedidos do app que ainda esperam aprovação, do mais próximo para o mais distante
+  const pendentes = db => db.agendamentos.filter(a => a.status === 'pendente' && N.abs(a.data, a.hora) > N.absAgora() - 60).sort((a, b) => N.abs(a.data, a.hora) - N.abs(b.data, b.hora));
   // "Hoje", "Amanhã" ou "Qua, 11/11"
   const diaCurto = d => { const hj = N.hoje(); if (d === hj) return 'Hoje'; if (d === N.addDias(hj, 1)) return 'Amanhã'; return `${N.DIAS_C[N.diaSemana(d)]}, ${d.slice(8, 10)}/${d.slice(5, 7)}`; };
   const escuro = () => document.documentElement.dataset.theme === 'dark';
@@ -64,7 +66,7 @@
   function shell(r, conteudo, db) {
     const pend = db.agendamentos.filter(a => a.status === 'pendente').length;
     const pedidos = db.lgpd.pedidos.filter(p => p.status === 'aberto').length;
-    const ativo = x => (x === r || (x === 'clientes' && r === 'ficha') || (x === 'mais' && MAIS.some(m => m[0] === r))) ? 'on' : '';
+    const ativo = x => (x === r || (x === 'clientes' && r === 'ficha') || (x === 'inicio' && r === 'pedidos') || (x === 'mais' && MAIS.some(m => m[0] === r))) ? 'on' : '';
     const n = (k) => k === 'inicio' && pend ? `<span class="pill-n">${pend}</span>` : k === 'privacidade' && pedidos ? `<span class="pill-n">${pedidos}</span>` : '';
     return `
     <aside class="side">
@@ -203,7 +205,7 @@
     const hj = H(), ag = N.agora();
     const saud = ag.min < 720 ? 'Bom dia' : ag.min < 1080 ? 'Boa tarde' : 'Boa noite';
     const doDia = db.agendamentos.filter(a => a.data === hj && a.status !== 'cancelado');
-    const pend = db.agendamentos.filter(a => a.status === 'pendente' && N.abs(a.data, a.hora) > N.absAgora() - 60);
+    const pend = pendentes(db);
     const fd = N.faturamento(db, hj, hj), fs = N.faturamento(db, N.inicioSemana(hj), hj), fm = N.faturamento(db, hj.slice(0, 7) + '-01', hj);
     const previsto = doDia.filter(a => a.status === 'confirmado').reduce((s, a) => s + a.preco, 0);
     const f30 = N.faturamento(db, N.addDias(hj, -29), hj);
@@ -214,14 +216,13 @@
     const fila = (db.filaWhats || []).filter(w => !w.enviado);
     const agoraAbs = N.absAgora();
 
-    // Ordem pensada para o celular: pedidos pendentes (o que pede ação) primeiro, depois o dia, depois os números.
-    const secPedidos = `
-      <section class="card${pend.length ? ' destaque' : ''}"><div class="card-h"><h3>Pedidos para aprovar</h3>${pend.length ? `<span class="badge st-pendente">${pend.length}</span>` : ''}</div>
-        ${pend.length ? `<div class="lista">${pend.map(a => { const c = N.cliente(db, a.clienteId) || {}; return `<div class="ped">
-          <div class="ped-info" onclick="P.abrirAg('${a.id}')"><div class="avatar sm">${iniciais(c.nome)}</div><div class="grow"><div class="t ellip">${esc(c.nome)}</div><div class="quando">${diaCurto(a.data)} · ${a.hora}</div><div class="s ellip">${esc(N.nomesServ(db, a.servicoIds))}</div></div></div>
-          <div class="ped-acoes"><button class="btn sec sm" onclick="P.recusar('${a.id}')">${ic('x')} Recusar</button><button class="btn sm ok" onclick="P.aprovar('${a.id}')">${ic('check')} Aprovar</button></div></div>`; }).join('')}</div>` : `<div class="vazio">${ic('check')}<p>Tudo em dia! Nenhum pedido pendente.</p></div>`}
-      </section>
-`;
+    // Pedidos pendentes: só um aviso compacto aqui; a revisão acontece na tela "Pedidos".
+    const p1 = pend[0], c1 = p1 && (N.cliente(db, p1.clienteId) || {});
+    const avisoPed = pend.length ? `<a class="aviso-ped mb" href="#/pedidos">
+      <span class="ap-ic">${ic('clock')}</span>
+      <span class="grow"><b>${pend.length} pedido${pend.length > 1 ? 's' : ''} esperando aprovação</b>
+        <span class="small muted">Próximo: ${esc((c1.nome || '').split(' ')[0])} · ${diaCurto(p1.data)} · ${p1.hora}</span></span>
+      <span class="btn sm">Revisar</span></a>` : '';
     const secHoje = `
       <section class="card"><div class="card-h"><h3>Hoje</h3><a class="btn ghost sm" href="#/agenda">Agenda ${ic('right')}</a></div>
         ${doDia.length ? `<div class="timeline">${doDia.map(a => {
@@ -234,12 +235,14 @@
       </section>
 `;
     return topo(`${saud}!`, `${N.fmtDataLonga(hj)} · ${doDia.length} atendimento${doDia.length === 1 ? '' : 's'} hoje`) + `
-    <div class="grid g2 mb" style="align-items:start">${pend.length ? secPedidos + secHoje : secHoje + secPedidos}</div>
-    <div class="grid g4 mb">
-      <div class="card kpi"><div class="l">Hoje</div><div class="v">${N.fmtMoeda(fd.total)}</div><div class="d">+ ${N.fmtMoeda(previsto)} previsto</div></div>
-      <div class="card kpi"><div class="l">Semana</div><div class="v">${N.fmtMoeda(fs.total)}</div><div class="d">${fs.qtd} atendimentos</div></div>
-      <div class="card kpi"><div class="l">Mês</div><div class="v">${N.fmtMoeda(fm.total)}</div><div class="d">${fm.qtd} atendimentos</div></div>
-      <div class="card kpi"><div class="l">Ticket médio</div><div class="v">${N.fmtMoeda(fm.ticket)}</div><div class="d">no mês</div></div>
+    ${avisoPed}
+    <div class="grid g2 mb" style="align-items:start">${secHoje}
+      <div class="grid kpis2">
+        <div class="card kpi"><div class="l">Hoje</div><div class="v">${N.fmtMoeda(fd.total)}</div><div class="d">+ ${N.fmtMoeda(previsto)} previsto</div></div>
+        <div class="card kpi"><div class="l">Semana</div><div class="v">${N.fmtMoeda(fs.total)}</div><div class="d">${fs.qtd} atendimentos</div></div>
+        <div class="card kpi"><div class="l">Mês</div><div class="v">${N.fmtMoeda(fm.total)}</div><div class="d">${fm.qtd} atendimentos</div></div>
+        <div class="card kpi"><div class="l">Ticket médio</div><div class="v">${N.fmtMoeda(fm.ticket)}</div><div class="d">no mês</div></div>
+      </div>
     </div>
     <div class="grid g2 mb">
       <section class="card"><div class="card-h"><h3>Serviços mais vendidos</h3><span class="small muted">últimos 30 dias</span></div>
@@ -815,6 +818,21 @@
       <label class="f mt"><span>Texto</span><textarea class="inp" id="dc-t" style="min-height:280px">${esc(d.texto)}</textarea></label>
       <div class="acoes"><button class="btn" id="dc-ok">Publicar versão</button></div>`, { titulo: 'Publicar nova versão', largo: true });
     $('#dc-ok', m).onclick = () => { const v = $('#dc-v', m).value.trim(); if (!v || v === d.versao) return toast('Informe uma versão diferente.', 'erro'); const d2 = D(); d2[k] = { versao: v, data: H(), texto: $('#dc-t', m).value }; if (k === 'termos' && d2.privacidade.versao !== v) { /* mantém versões independentes */ } N.logLGPD(d2, 'dona', 'Nova versão publicada', `${k === 'termos' ? 'Termos de Uso' : 'Política de Privacidade'} v${v}`); N.save(d2); toast('Nova versão publicada.'); fecharERender(); };
+  };
+
+  /* ============================ PEDIDOS ============================ */
+  TELAS.pedidos = db => {
+    const pend = pendentes(db);
+    const dias = []; pend.forEach(a => { const d = dias.find(x => x.data === a.data); d ? d.ags.push(a) : dias.push({ data: a.data, ags: [a] }); });
+    return `<a class="btn ghost voltar" href="#/inicio">${ic('left')} Início</a>` + topo('Pedidos', pend.length ? `${pend.length} esperando aprovação` : 'Nenhum pedido pendente') + (pend.length
+      ? dias.map(d => `<h4 class="ped-dia">${diaCurto(d.data)}${d.data !== N.hoje() && d.data !== N.addDias(N.hoje(), 1) ? '' : ` · ${d.data.slice(8, 10)}/${d.data.slice(5, 7)}`}</h4>
+        <div class="card ped-card">${d.ags.map(a => { const c = N.cliente(db, a.clienteId) || {}; return `<div class="ped-li">
+          <button class="ped-info" onclick="P.abrirAg('${a.id}')"><span class="avatar sm">${iniciais(c.nome)}</span>
+            <span class="grow"><span class="row" style="gap:8px"><b class="ellip">${esc(c.nome)}</b><span class="hora">${a.hora}</span></span><span class="s ellip">${esc(N.nomesServ(db, a.servicoIds))} · ${N.fmtDur(a.duracao)}</span></span></button>
+          <button class="btn-ic ped-x" onclick="P.recusar('${a.id}')" aria-label="Recusar pedido de ${esc(c.nome)}" title="Recusar">${ic('x')}</button>
+          <button class="btn-ic ped-ok" onclick="P.aprovar('${a.id}')" aria-label="Aprovar pedido de ${esc(c.nome)}" title="Aprovar">${ic('check')}</button></div>`; }).join('')}</div>`).join('')
+      + `<p class="tiny soft mt-s" style="text-align:center">✓ aprova e avisa a cliente · ✕ recusa (pede confirmação)</p>`
+      : `<div class="card vazio">${ic('check')}<p>Tudo em dia! Nenhum pedido esperando aprovação.</p><a class="btn sm mt-s" href="#/inicio">Voltar ao início</a></div>`);
   };
 
   /* ============================ GALERIA ============================ */
